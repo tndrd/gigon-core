@@ -12,10 +12,14 @@ project(gigon-core)
 
 include_directories(Inc/)
 
-add_subdirectory(lib/asiosdk/)
-add_subdirectory(lib/PortableEndian)
+add_subdirectory(Lib/asiosdk/)
+add_subdirectory(Lib/PortableEndian/)
+add_subdirectory(Lib/vstsdk2.4/)
 
 add_library(AsioContext Src/AsioContext.cpp)
 target_link_libraries(AsioContext PUBLIC asiodrivers asio)
+
+add_library(Vst2Effect Src/Vst2Effect.cpp)
+target_link_libraries(Vst2Effect PUBLIC AEffectX)
 
 include(Examples/examples.cmake)
