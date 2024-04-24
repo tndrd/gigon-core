@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.29)
-project(ASIO-SDK)
+project(asiosdk)
 
 set(ASIO_HEADERS_PATHS host/pc/ host/ common/)
 
