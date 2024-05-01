@@ -21,7 +21,10 @@ add_library(Helpers Src/Helpers.cpp)
 add_library(AsioContext Src/AsioContext.cpp)
 target_link_libraries(AsioContext PUBLIC asiodrivers asio Helpers)
 
-add_executable(Vst2Effect Src/Vst2Effect.cpp)
+add_library(Vst2Effect Src/Vst2Effect.cpp)
 target_link_libraries(Vst2Effect PUBLIC AEffectX Helpers)
+
+add_library(AsioVstPlug Src/AsioVstPlug.cpp)
+target_link_libraries(AsioVstPlug PUBLIC Vst2Effect AsioContext PortableEndian)
 
 include(Examples/examples.cmake)
