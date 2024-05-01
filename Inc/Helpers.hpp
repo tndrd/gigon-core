@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <system_error>
+#include <type_traits>
 
 namespace GigOn {
 namespace Helpers {
@@ -48,19 +49,27 @@ class DllLoader final {
   const std::string& GetPath() const;
 };
 
-struct Flag {
+template <typename T>
+struct Moveable {
  private:
-  bool Value;
+  T Value;
 
  public:
-  explicit Flag(bool val);
-  Flag(const Flag&) = delete;
-  Flag& operator=(const Flag&) = delete;
+  // TODO: Universal reference
+  explicit Moveable(T val) : Value{val} {}
 
-  Flag(Flag&& rhs);
-  Flag& operator=(Flag&& rhs);
+  Moveable(const Moveable&) = default;
+  Moveable& operator=(const Moveable&) = default;
 
-  bool& Access();
+  Moveable(Moveable&& rhs) : Value{std::move(rhs.Value)} { rhs.Value = {}; }
+
+  Moveable& operator=(Moveable&& rhs) {
+    std::swap(Value, rhs.Value);
+    return *this;
+  }
+
+  T& Access() { return Value; }
+  const T& Access() const { return Value; }
 };
 
 }  // namespace Helpers

@@ -41,16 +41,5 @@ FARPROC DllLoader::GetProcAddress(const std::string& procName) const {
 
 const std::string& DllLoader::GetPath() const { return Path; }
 
-Flag::Flag(bool val) : Value{val} {}
-
-Flag::Flag(Flag&& rhs) : Value{rhs.Value} {}
-
-Flag& Flag::operator=(Flag&& rhs) {
-  std::swap(Value, rhs.Value);
-  return *this;
-}
-
-bool& Flag::Access() { return Value; }
-
 }  // namespace Helpers
 }  // namespace GigOn
