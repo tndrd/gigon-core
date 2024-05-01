@@ -2,7 +2,6 @@
 
 #include <cassert>
 
-
 #undef min
 #undef max
 
@@ -58,23 +57,19 @@ void AsioContext::InitDriver() {
   Initialized = true;
 }
 
-void AsioContext::SetCallbacks(ProcessCallback inputCallback,
-                               ProcessCallback outputCallback,
-                               DriverEventCallback eventHandler) {
+void AsioContext::SetCallbacks(HandlerT&& handler) {
   Expect(Initialized, Msg::NotInit);
   Expect(!BuffersCreated, Msg::BuffersPresent);
 
-  UserCallbacks.ProcessInput = inputCallback;
-  UserCallbacks.ProcessOutput = outputCallback;
-  UserCallbacks.HandleEvent = eventHandler;
+  Handler = std::move(handler);
 
-  CallbacksSet = true;
+  HandlersSet = true;
 }
 
 void AsioContext::CreateBuffers(const std::vector<ChannelId>& inputs,
                                 const std::vector<ChannelId>& outputs,
                                 size_t bufferSize) {
-  Expect(CallbacksSet, Msg::NoCallbacksSet);
+  Expect(HandlersSet, Msg::NoHandlersSet);
   Expect(!BuffersCreated, Msg::BuffersPresent);
 
   CheckBufferSize(bufferSize);
@@ -272,9 +267,9 @@ void AsioContext::AsioBufferSwitchCallback(long index, ASIOBool processNow) {
                                       : asio.DeviceInfo.Outputs[channel];
 
     if (isInput)
-      asio.UserCallbacks.ProcessInput(channel, bufPtr, channelInfo.type);
+      asio.Handler->ProcessInput(channel, bufPtr, channelInfo.type);
     else
-      asio.UserCallbacks.ProcessOutput(channel, bufPtr, channelInfo.type);
+      asio.Handler->ProcessOutput(channel, bufPtr, channelInfo.type);
   }
 
   if (asio.PostOutput) ASIOOutputReady();
@@ -307,7 +302,7 @@ long AsioContext::AsioMessageCallback(long selector, long value, void* message,
       ret = 1;
       break;
     case kAsioOverload:
-      AsioContext::Get().UserCallbacks.HandleEvent(
+      AsioContext::Get().Handler->HandleEvent(
           AsioContext::DriverEvent::Overload);
       break;
   }
@@ -471,5 +466,38 @@ const char* Helpers::ASIOSampleTypeToStr(ASIOSampleType type) {
 
 #undef CASEGEN
 }
+
+Helpers::AsioHandlerMock::AsioHandlerMock(decltype(ProcessInputFunc) pi,
+                                          decltype(ProcessOutputFunc) po,
+                                          decltype(ConfigureFunc) cf,
+                                          decltype(HandleEventFunc) he)
+    : ProcessInputFunc{pi},
+      ProcessOutputFunc{po},
+      ConfigureFunc{cf},
+      HandleEventFunc{he} {}
+
+void Helpers::AsioHandlerMock::ProcessInput(long channel, void* buf,
+                                            ASIOSampleType type) {
+  ProcessInputFunc(channel, buf, type);
+}
+
+void Helpers::AsioHandlerMock::ProcessOutput(long channel, void* buf,
+                                             ASIOSampleType type) {
+  ProcessOutputFunc(channel, buf, type);
+}
+
+void Helpers::AsioHandlerMock::Configure(size_t bufSize, size_t nChannels) {
+  ConfigureFunc(bufSize, nChannels);
+}
+
+void Helpers::AsioHandlerMock::HandleEvent(AsioContext::DriverEvent event) {
+  HandleEventFunc(event);
+}
+
+AsioContext::HandlerT Helpers::AsioHandlerMock::Create(
+    decltype(ProcessInputFunc) pi, decltype(ProcessOutputFunc) po,
+    decltype(ConfigureFunc) cf, decltype(HandleEventFunc) he) {
+  return std::make_unique<AsioHandlerMock>(pi, po, cf, he);
+};
 
 }  // namespace GigOn

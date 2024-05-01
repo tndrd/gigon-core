@@ -43,10 +43,18 @@ class AsioContext final {
 
   using ChannelId = size_t;
 
-  // long as channel ID remains here to avoid narrowing conversions
-  using ProcessCallback = std::function<void(
-      long /* channel */, void* /* buffer */, ASIOSampleType /* type */)>;
-  using DriverEventCallback = std::function<void(DriverEvent /* event */)>;
+  struct IHandler {
+    virtual void Configure(size_t bufSize, size_t nChannels) = 0;
+    virtual void ProcessInput(long channel, void* buffer,
+                              ASIOSampleType type) = 0;
+    virtual void ProcessOutput(long channel, void* buffer,
+                               ASIOSampleType type) = 0;
+    virtual void HandleEvent(DriverEvent event) = 0;
+
+    virtual ~IHandler() = default;
+  };
+
+  using HandlerT = std::unique_ptr<IHandler>;
 
  private:
   struct Msg {
@@ -58,7 +66,7 @@ class AsioContext final {
     static constexpr auto BuffersAbsent = "Buffers are not created";
     static constexpr auto AlreadyRunning = "Driver is already running";
     static constexpr auto NotRunning = "Driver is not running";
-    static constexpr auto NoCallbacksSet = "Callbacks are not set";
+    static constexpr auto NoHandlersSet = "Handlers are not set";
   };
 
  private:
@@ -76,15 +84,11 @@ class AsioContext final {
 
   ASIOCallbacks AsioCallbacks;
 
-  struct {
-    ProcessCallback ProcessInput;
-    ProcessCallback ProcessOutput;
-    DriverEventCallback HandleEvent;
-  } UserCallbacks;
+  HandlerT Handler;
 
   bool Loaded = false;
   bool Initialized = false;
-  bool CallbacksSet = false;
+  bool HandlersSet = false;
   bool BuffersCreated = false;
   bool Started = false;
 
@@ -112,9 +116,7 @@ class AsioContext final {
   void InitDriver();
   void DeInitDriver();
 
-  void SetCallbacks(ProcessCallback inputCallback,
-                    ProcessCallback outputCallback,
-                    DriverEventCallback eventHandler);
+  void SetCallbacks(HandlerT&& handler);
 
   void CreateBuffers(const std::vector<ChannelId>& inputs,
                      const std::vector<ChannelId>& outputs, size_t bufferSize);
@@ -161,6 +163,28 @@ class AsioContext final {
 };
 
 namespace Helpers {
+struct AsioHandlerMock final : public AsioContext::IHandler {
+ private:
+  std::function<void(long, void*, ASIOSampleType)> ProcessInputFunc;
+  std::function<void(long, void*, ASIOSampleType)> ProcessOutputFunc;
+  std::function<void(size_t, size_t)> ConfigureFunc;
+  std::function<void(AsioContext::DriverEvent)> HandleEventFunc;
+
+ public:
+  AsioHandlerMock(decltype(ProcessInputFunc), decltype(ProcessOutputFunc),
+                  decltype(ConfigureFunc), decltype(HandleEventFunc));
+
+  void ProcessInput(long channel, void* buf, ASIOSampleType type) override;
+  void ProcessOutput(long channel, void* buf, ASIOSampleType type) override;
+  void Configure(size_t bufSize, size_t nChannels) override;
+  void HandleEvent(AsioContext::DriverEvent event) override;
+
+  static AsioContext::HandlerT Create(decltype(ProcessInputFunc),
+                                      decltype(ProcessOutputFunc),
+                                      decltype(ConfigureFunc),
+                                      decltype(HandleEventFunc));
+};
+
 void DumpAsioInfo(std::ostream& out, const ASIODriverInfo& info);
 void DumpDeviceInfo(std::ostream& out,
                     const AsioContext::DeviceInformation& info);

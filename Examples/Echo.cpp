@@ -34,7 +34,8 @@ void DisplayValue(float value) {
 
 void PrintUsageAndExit(const char* reason) {
   std::cout << "Incorrect " << reason << std::endl;
-  std::cout << "Usage:   ./Echo <DRIVER_NAME> <BUFFER_SIZE> <IN_CHANNEL> <OUT_CHANNEL>"
+  std::cout << "Usage:   ./Echo <DRIVER_NAME> <BUFFER_SIZE> <IN_CHANNEL> "
+               "<OUT_CHANNEL>"
             << std::endl;
   std::cout << "Example: ./Echo \"Focusrite USB ASIO\" 64 1 1";
   exit(1);
@@ -50,11 +51,12 @@ int main(int argc, char* argv[]) try {
 
   float average = 0;
 
-  // We guarantee that input callback will 
+  // We guarantee that input callback will
   // be called before output callbacks
   void* inputBuffer = nullptr;
 
-  auto inputCb = [bufferSize, &average, &inputBuffer](long channel, void* buffer, ASIOSampleType stype) {
+  auto inputCb = [bufferSize, &average, &inputBuffer](
+                     long channel, void* buffer, ASIOSampleType stype) {
     assert(stype == ASIOSTInt32LSB);
     assert(buffer);
 
@@ -73,7 +75,8 @@ int main(int argc, char* argv[]) try {
     inputBuffer = buffer;
   };
 
-  auto outputCb = [bufferSize, &inputBuffer](long channel, void* buffer, ASIOSampleType stype) {
+  auto outputCb = [bufferSize, &inputBuffer](long channel, void* buffer,
+                                             ASIOSampleType stype) {
     assert(stype == ASIOSTInt32LSB);
     assert(inputBuffer);
     assert(buffer);
@@ -81,6 +84,7 @@ int main(int argc, char* argv[]) try {
     memcpy(buffer, inputBuffer, 4 * bufferSize);
   };
   auto eventCb = [](GigOn::AsioContext::DriverEvent event) -> void {};
+  auto confCb = [](size_t, size_t) {};
 
   auto& asio = GigOn::AsioContext::Get();
 
@@ -89,7 +93,8 @@ int main(int argc, char* argv[]) try {
   asio.InitDriver();
 
   std::cout << "Creating buffer..." << std::endl;
-  asio.SetCallbacks(inputCb, outputCb, eventCb);
+  asio.SetCallbacks(GigOn::Helpers::AsioHandlerMock::Create(inputCb, outputCb,
+                                                            confCb, eventCb));
   asio.CreateBuffers({inChannel}, {outChannel}, bufferSize);
 
   std::cout << "Starting..." << std::endl;
