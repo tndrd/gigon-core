@@ -8,6 +8,9 @@
 const unsigned short SCALE_SIZE = 50;
 const DWORD UPDATE_PERIOD_MS = 100;
 
+using namespace GigOn;
+using namespace GigOn::Helpers;
+
 void DisplayValue(float value) {
   int norm = value * SCALE_SIZE;
 
@@ -84,7 +87,7 @@ int main(int argc, char* argv[]) try {
     memcpy(buffer, inputBuffer, 4 * bufferSize);
   };
   auto eventCb = [](GigOn::AsioContext::DriverEvent event) -> void {};
-  auto confCb = [](size_t, size_t) {};
+  auto confCb = [](size_t, size_t, size_t) {};
 
   auto& asio = GigOn::AsioContext::Get();
 
@@ -93,8 +96,11 @@ int main(int argc, char* argv[]) try {
   asio.InitDriver();
 
   std::cout << "Creating buffer..." << std::endl;
-  asio.SetCallbacks(GigOn::Helpers::AsioHandlerMock::Create(inputCb, outputCb,
-                                                            confCb, eventCb));
+
+  auto processor = AsioProcessorMock::Create(inputCb, outputCb, confCb);
+  auto handler = AsioHandlerMock::Create(eventCb);
+
+  asio.SetHandlers(std::move(processor), std::move(handler));
   asio.CreateBuffers({inChannel}, {outChannel}, bufferSize);
 
   std::cout << "Starting..." << std::endl;
