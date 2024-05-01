@@ -2,7 +2,6 @@
 #include <windows.h>
 
 #include <cassert>
-#include <clocale>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -17,21 +16,27 @@
 namespace GigOn {
 
 class VstProcessBuffer {
-  size_t BlockSize = 0;
-
-  // aka channels
-  size_t BufferLen = 0;
+public:
+  using VstBufferT = float**;
+  using CVstBufferT = const float* const*;
+private:
+  Helpers::Moveable<size_t> BlockSize;
+  Helpers::Moveable<size_t> NChannels;
 
   std::vector<float> Buffer{};
   std::vector<float*> Pointers{};
 
  public:
-  VstProcessBuffer(size_t blockSize, size_t bufferLen);
+  VstProcessBuffer(size_t blockSize, size_t nChannels);
 
-  float** GetVstBuffers();
-  const float* const* GetVstBuffers() const;
+  VstBufferT GetVstBuffers();
+  CVstBufferT GetVstBuffers() const;
+
+  float* GetBufferByChannel(size_t channel);
+  const float* GetBufferByChannel(size_t channel) const;
+
   size_t GetBlockSize() const;
-  size_t GetBufferLen() const;
+  size_t GetChannels() const;
 };
 
 // Vst2 AEffect* wrapper
@@ -55,8 +60,8 @@ class Vst2Effect final {
     size_t NumOutputs = 0;
   } Info;
 
-  Helpers::Flag Configured{false};
-  Helpers::Flag Started{false};
+  Helpers::Moveable<bool> Configured{false};
+  Helpers::Moveable<bool> Started{false};
 
   size_t BlockSize = 0;
   std::unique_ptr<AEffect, EffectDeleter> Effect{};
@@ -68,7 +73,7 @@ class Vst2Effect final {
   void Start();
   void Stop();
 
-  void Process(VstProcessBuffer& input, VstProcessBuffer& output);
+  void Process(const VstProcessBuffer& input, VstProcessBuffer& output);
   EffectInfo GetInfo() const;
 
   Vst2Effect(const Vst2Effect&) = delete;
