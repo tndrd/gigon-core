@@ -57,10 +57,11 @@ void AsioContext::InitDriver() {
   Initialized = true;
 }
 
-void AsioContext::SetCallbacks(HandlerT&& handler) {
+void AsioContext::SetHandlers(ProcessorT&& proc, HandlerT&& handler) {
   Expect(Initialized, Msg::NotInit);
   Expect(!BuffersCreated, Msg::BuffersPresent);
 
+  Processor = std::move(proc);
   Handler = std::move(handler);
 
   HandlersSet = true;
@@ -104,6 +105,8 @@ void AsioContext::CreateBuffers(const std::vector<ChannelId>& inputs,
   ActiveBuffersInfo.BufferSize = bufferSize;
 
   AsioBufferInfos = std::move(binfos);
+
+  Processor->Configure(bufferSize, inputs.size(), outputs.size());
 
   BuffersCreated = true;
 }
@@ -267,9 +270,9 @@ void AsioContext::AsioBufferSwitchCallback(long index, ASIOBool processNow) {
                                       : asio.DeviceInfo.Outputs[channel];
 
     if (isInput)
-      asio.Handler->ProcessInput(channel, bufPtr, channelInfo.type);
+      asio.Processor->ProcessInput(channel, bufPtr, channelInfo.type);
     else
-      asio.Handler->ProcessOutput(channel, bufPtr, channelInfo.type);
+      asio.Processor->ProcessOutput(channel, bufPtr, channelInfo.type);
   }
 
   if (asio.PostOutput) ASIOOutputReady();
@@ -467,37 +470,45 @@ const char* Helpers::ASIOSampleTypeToStr(ASIOSampleType type) {
 #undef CASEGEN
 }
 
-Helpers::AsioHandlerMock::AsioHandlerMock(decltype(ProcessInputFunc) pi,
-                                          decltype(ProcessOutputFunc) po,
-                                          decltype(ConfigureFunc) cf,
-                                          decltype(HandleEventFunc) he)
-    : ProcessInputFunc{pi},
+Helpers::AsioProcessorMock::AsioProcessorMock(decltype(ProcessInputFunc) pi,
+                                              decltype(ProcessOutputFunc) po,
+                                              decltype(ConfigureFunc) cf)
+    : AsioContext::IProcessor{},
+      ProcessInputFunc{pi},
       ProcessOutputFunc{po},
-      ConfigureFunc{cf},
-      HandleEventFunc{he} {}
+      ConfigureFunc{cf} {}
 
-void Helpers::AsioHandlerMock::ProcessInput(long channel, void* buf,
-                                            ASIOSampleType type) {
+void Helpers::AsioProcessorMock::ProcessInput(long channel, void* buf,
+                                              ASIOSampleType type) {
   ProcessInputFunc(channel, buf, type);
 }
 
-void Helpers::AsioHandlerMock::ProcessOutput(long channel, void* buf,
-                                             ASIOSampleType type) {
+void Helpers::AsioProcessorMock::ProcessOutput(long channel, void* buf,
+                                               ASIOSampleType type) {
   ProcessOutputFunc(channel, buf, type);
 }
 
-void Helpers::AsioHandlerMock::Configure(size_t bufSize, size_t nChannels) {
-  ConfigureFunc(bufSize, nChannels);
+void Helpers::AsioProcessorMock::Configure(size_t bufSize, size_t nInputs,
+                                           size_t nOutputs) {
+  ConfigureFunc(bufSize, nInputs, nOutputs);
 }
 
+AsioContext::ProcessorT Helpers::AsioProcessorMock::Create(
+    decltype(ProcessInputFunc) pi, decltype(ProcessOutputFunc) po,
+    decltype(ConfigureFunc) cf) {
+  return std::make_unique<AsioProcessorMock>(pi, po, cf);
+};
+
+Helpers::AsioHandlerMock::AsioHandlerMock(decltype(HandleFunc) handler)
+    : AsioContext::IHandler{}, HandleFunc{handler} {}
+
 void Helpers::AsioHandlerMock::HandleEvent(AsioContext::DriverEvent event) {
-  HandleEventFunc(event);
+  HandleFunc(event);
 }
 
 AsioContext::HandlerT Helpers::AsioHandlerMock::Create(
-    decltype(ProcessInputFunc) pi, decltype(ProcessOutputFunc) po,
-    decltype(ConfigureFunc) cf, decltype(HandleEventFunc) he) {
-  return std::make_unique<AsioHandlerMock>(pi, po, cf, he);
+    decltype(HandleFunc) handler) {
+  return std::make_unique<AsioHandlerMock>(handler);
 };
 
 }  // namespace GigOn

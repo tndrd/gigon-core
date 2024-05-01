@@ -43,17 +43,21 @@ class AsioContext final {
 
   using ChannelId = size_t;
 
-  struct IHandler {
-    virtual void Configure(size_t bufSize, size_t nChannels) = 0;
+  struct IProcessor {
+    virtual void Configure(size_t bufSize, size_t nInputs, size_t nOutputs) = 0;
     virtual void ProcessInput(long channel, void* buffer,
                               ASIOSampleType type) = 0;
     virtual void ProcessOutput(long channel, void* buffer,
                                ASIOSampleType type) = 0;
-    virtual void HandleEvent(DriverEvent event) = 0;
+    virtual ~IProcessor() = default;
+  };
 
+  struct IHandler {
+    virtual void HandleEvent(DriverEvent event) = 0;
     virtual ~IHandler() = default;
   };
 
+  using ProcessorT = std::unique_ptr<IProcessor>;
   using HandlerT = std::unique_ptr<IHandler>;
 
  private:
@@ -84,6 +88,7 @@ class AsioContext final {
 
   ASIOCallbacks AsioCallbacks;
 
+  ProcessorT Processor;
   HandlerT Handler;
 
   bool Loaded = false;
@@ -116,7 +121,7 @@ class AsioContext final {
   void InitDriver();
   void DeInitDriver();
 
-  void SetCallbacks(HandlerT&& handler);
+  void SetHandlers(ProcessorT&& processor, HandlerT&& handler);
 
   void CreateBuffers(const std::vector<ChannelId>& inputs,
                      const std::vector<ChannelId>& outputs, size_t bufferSize);
@@ -163,26 +168,34 @@ class AsioContext final {
 };
 
 namespace Helpers {
-struct AsioHandlerMock final : public AsioContext::IHandler {
+struct AsioProcessorMock final : public AsioContext::IProcessor {
  private:
   std::function<void(long, void*, ASIOSampleType)> ProcessInputFunc;
   std::function<void(long, void*, ASIOSampleType)> ProcessOutputFunc;
-  std::function<void(size_t, size_t)> ConfigureFunc;
-  std::function<void(AsioContext::DriverEvent)> HandleEventFunc;
+  std::function<void(size_t, size_t, size_t)> ConfigureFunc;
 
  public:
-  AsioHandlerMock(decltype(ProcessInputFunc), decltype(ProcessOutputFunc),
-                  decltype(ConfigureFunc), decltype(HandleEventFunc));
+  AsioProcessorMock(decltype(ProcessInputFunc), decltype(ProcessOutputFunc),
+                  decltype(ConfigureFunc));
 
   void ProcessInput(long channel, void* buf, ASIOSampleType type) override;
   void ProcessOutput(long channel, void* buf, ASIOSampleType type) override;
-  void Configure(size_t bufSize, size_t nChannels) override;
-  void HandleEvent(AsioContext::DriverEvent event) override;
+  void Configure(size_t bufSize, size_t nInputs, size_t nOutputs) override;
 
-  static AsioContext::HandlerT Create(decltype(ProcessInputFunc),
+  static AsioContext::ProcessorT Create(decltype(ProcessInputFunc),
                                       decltype(ProcessOutputFunc),
-                                      decltype(ConfigureFunc),
-                                      decltype(HandleEventFunc));
+                                      decltype(ConfigureFunc));
+};
+
+struct AsioHandlerMock final : public AsioContext::IHandler {
+ private:
+  std::function<void(AsioContext::DriverEvent)> HandleFunc;
+
+ public:
+  AsioHandlerMock(decltype(HandleFunc));
+  void HandleEvent(AsioContext::DriverEvent) override;
+
+  static AsioContext::HandlerT Create(decltype(HandleFunc));
 };
 
 void DumpAsioInfo(std::ostream& out, const ASIODriverInfo& info);
