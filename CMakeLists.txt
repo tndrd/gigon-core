@@ -16,10 +16,12 @@ add_subdirectory(Lib/asiosdk/)
 add_subdirectory(Lib/PortableEndian/)
 add_subdirectory(Lib/vstsdk2.4/)
 
+add_library(Helpers Src/Helpers.cpp)
+
 add_library(AsioContext Src/AsioContext.cpp)
-target_link_libraries(AsioContext PUBLIC asiodrivers asio)
+target_link_libraries(AsioContext PUBLIC asiodrivers asio Helpers)
 
 add_executable(Vst2Effect Src/Vst2Effect.cpp)
-target_link_libraries(Vst2Effect PUBLIC AEffectX)
+target_link_libraries(Vst2Effect PUBLIC AEffectX Helpers)
 
 include(Examples/examples.cmake)
