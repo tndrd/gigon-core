@@ -1,3 +1,5 @@
+#pragma once
+
 // asiosys needs to be included first
 // clang-format off
 #include "asiosys.h"

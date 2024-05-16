@@ -1,16 +1,4 @@
-
-// clang-format off
-#include <winsock2.h>
-#include <windows.h>
-// clang-format on
-
-#include "AsioContext.hpp"
-#include "PortableEndian.h"
-#include "Vst2Effect.hpp"
-
-#undef max  // I hate windows
-
-#include <limits>
+#include "AsioVstBuffers.hpp"
 
 namespace GigOn {
 
@@ -51,9 +39,9 @@ size_t VstFloat2AsioSample(const float* src, void* dst, ASIOSampleType type) {
 #define CASEGEN(asioType, width, endianness)                       \
   case asioType: {                                                 \
     using hostType = int##width##_t;                               \
-    hostType* dst = reinterpret_cast<hostType*>(dst);              \
+    hostType* hdst = reinterpret_cast<hostType*>(dst);              \
     hostType sample = *src * std::numeric_limits<hostType>::max(); \
-    *dst = hto##endianness##e##width(sample);                      \
+    *hdst = hto##endianness##e##width(sample);                      \
     return sizeof(hostType);                                       \
   }
 
@@ -73,53 +61,39 @@ size_t VstFloat2AsioSample(const float* src, void* dst, ASIOSampleType type) {
 #undef CASEGEN
 }  // namespace Helpers
 
-struct AsioVstPlug final {
- private:
-  VstProcessBuffer Inputs{0, 0};
-  VstProcessBuffer Outputs{0, 0};
+void AsioVstBuffers::Configure(size_t blockSize, size_t nInputs,
+                               size_t nOutputs) {
+  Inputs = VstProcessBuffer(blockSize, nInputs);
+  Outputs = VstProcessBuffer(blockSize, nOutputs);
+}
 
- public:
-  AsioVstPlug() = default;
+void AsioVstBuffers::Asio2VstInput(long channel, void* buffer,
+                                   ASIOSampleType type) {
+  assert(buffer);
+  assert(channel >= 0);
 
-  AsioVstPlug(const AsioVstPlug&) = delete;
-  AsioVstPlug& operator=(const AsioVstPlug&) = delete;
+  float* dst = Inputs.GetBufferByChannel(channel);
+  const uint8_t* src = reinterpret_cast<uint8_t*>(buffer);
 
-  AsioVstPlug(AsioVstPlug&&) = default;
-  AsioVstPlug& operator=(AsioVstPlug&&) = default;
-  ~AsioVstPlug() = default;
+  size_t sz = Inputs.GetBlockSize();
+  for (size_t i = 0; i < sz; ++i)
+    src += Helpers::AsioSample2VstFloat(src, dst + i, type);
+}
 
- public:
-  void Configure(size_t blockSize, size_t nInputs, size_t nOutputs) {
-    Inputs = VstProcessBuffer(blockSize, nInputs);
-    Outputs = VstProcessBuffer(blockSize, nOutputs);
-  }
+void AsioVstBuffers::Vst2AsioOutput(long channel, void* buffer,
+                                    ASIOSampleType type) const {
+  assert(buffer);
+  assert(channel >= 0);
 
-  void Asio2VstInput(long channel, void* buffer, ASIOSampleType type) {
-    assert(buffer);
-    assert(channel >= 0);
+  const float* src = Outputs.GetBufferByChannel(channel);
+  uint8_t* dst = reinterpret_cast<uint8_t*>(buffer);
 
-    float* dst = Inputs.GetBufferByChannel(channel);
-    const uint8_t* src = reinterpret_cast<uint8_t*>(buffer);
+  size_t sz = Outputs.GetBlockSize();
+  for (size_t i = 0; i < sz; ++i)
+    dst += Helpers::VstFloat2AsioSample(src + i, dst, type);
+}
 
-    size_t sz = Inputs.GetBlockSize();
-    for (size_t i = 0; i < sz; ++i)
-      src += Helpers::AsioSample2VstFloat(src, dst + i, type);
-  }
-
-  void Vst2AsioOutput(long channel, void* buffer, ASIOSampleType type) const {
-    assert(buffer);
-    assert(channel >= 0);
-
-    const float* src = Outputs.GetBufferByChannel(channel);
-    uint8_t* dst = reinterpret_cast<uint8_t*>(buffer);
-
-    size_t sz = Outputs.GetBlockSize();
-    for (size_t i = 0; i < sz; ++i)
-      dst += Helpers::VstFloat2AsioSample(src + i, dst, type);
-  }
-
-  const VstProcessBuffer& GetVstInputs() { return Inputs; }
-  VstProcessBuffer& GetVstOutputs() { return Outputs; }
-};
+const VstProcessBuffer& AsioVstBuffers::GetVstInputs() { return Inputs; }
+VstProcessBuffer& AsioVstBuffers::GetVstOutputs() { return Outputs; }
 
 }  // namespace GigOn

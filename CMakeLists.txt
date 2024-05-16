@@ -6,7 +6,7 @@ set(CMAKE_LINKER lld-link.exe)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON) 
 #set(CMAKE_CXX_CLANG_TIDY clang-tidy.exe)
 
-add_compile_options(-fansi-escape-codes -fcolor-diagnostics)
+add_compile_options(-fansi-escape-codes -fcolor-diagnostics -g)
 
 project(gigon-core)
 
@@ -24,7 +24,7 @@ target_link_libraries(AsioContext PUBLIC asiodrivers asio Helpers)
 add_library(Vst2Effect Src/Vst2Effect.cpp)
 target_link_libraries(Vst2Effect PUBLIC AEffectX Helpers)
 
-add_library(AsioVstPlug Src/AsioVstPlug.cpp)
-target_link_libraries(AsioVstPlug PUBLIC Vst2Effect AsioContext PortableEndian)
+add_library(AsioVstBuffers Src/AsioVstBuffers.cpp)
+target_link_libraries(AsioVstBuffers PUBLIC Vst2Effect AsioContext PortableEndian ws2_32)
 
 include(Examples/examples.cmake)
